@@ -40,6 +40,12 @@ public final class BlockUtil {
                 || block == Blocks.ANDESITE;
     }
 
+    public static boolean isTrustedClientObstruction(BlockState state) {
+        return state.isAir()
+                || !state.getFluidState().isEmpty()
+                || state.isOf(Blocks.BEDROCK);
+    }
+
     public static boolean isNetherBaseStone(BlockState state) {
         Block block = state.getBlock();
         return block == Blocks.NETHERRACK

@@ -50,6 +50,7 @@ public final class HudRenderer {
         int cachedRecords = predictionCache.recordCount(dimensionId);
         long masked = records.stream().filter(record -> record.visibilityStatus() == PredictionVisibilityStatus.PREDICTED_BUT_CLIENT_MASKED).count();
         long matching = records.stream().filter(record -> record.visibilityStatus() == PredictionVisibilityStatus.PREDICTED_AND_CLIENT_MATCHES).count();
+        long obstructed = records.stream().filter(record -> record.visibilityStatus() == PredictionVisibilityStatus.PREDICTED_CLIENT_OBSTRUCTED).count();
         long seedCandidates = records.stream().filter(record -> record.ruleSource().contains("seed_candidate")).count();
         long terrainChecked = records.size() - seedCandidates;
 
@@ -71,7 +72,7 @@ public final class HudRenderer {
         y += line;
         draw(context, "Render cap: " + config.maxRenderedHighlights + " | Distance: " + config.distanceLimitBlocks + " blocks | Cached: " + cachedRecords, x, y, color);
         y += line;
-        draw(context, "Masked: " + masked + " | Matching: " + matching + " | Unpredicted visible: " + diagnosticCache.unpredictedCount(dimensionId), x, y, color);
+        draw(context, "Masked: " + masked + " | Matching: " + matching + " | Obstructed: " + obstructed + " | Unpredicted: " + diagnosticCache.unpredictedCount(dimensionId), x, y, color);
         y += line;
         draw(context, "Prediction source: terrain " + terrainChecked + " | seed candidates " + seedCandidates, x, y, color);
         y += line;

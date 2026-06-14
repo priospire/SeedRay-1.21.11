@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 import net.minecraft.block.Block;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
@@ -44,13 +45,20 @@ public final class HighlightRenderer {
             return 0;
         }
         double maxDistanceSq = (double) config.distanceLimitBlocks * (double) config.distanceLimitBlocks;
-        List<VisibleRecord> candidates = new ArrayList<>(Math.min(records.size(), config.maxRenderedHighlights));
+        int renderLimit = Math.max(1, config.maxRenderedHighlights);
+        PriorityQueue<CandidateRecord> nearest = new PriorityQueue<>(
+                renderLimit,
+                Comparator.comparingDouble(CandidateRecord::distanceSq).reversed()
+        );
 
         for (OrePredictionRecord record : records) {
             if (!config.isOreEnabled(record.oreTarget())) {
                 continue;
             }
             if (!config.showMaskedPredictions && record.visibilityStatus() == PredictionVisibilityStatus.PREDICTED_BUT_CLIENT_MASKED) {
+                continue;
+            }
+            if (!config.showClientObstructedPredictions && record.visibilityStatus() == PredictionVisibilityStatus.PREDICTED_CLIENT_OBSTRUCTED) {
                 continue;
             }
             double distanceSq = MathUtil.squaredDistanceToCenter(camera, record.pos());
@@ -63,17 +71,27 @@ public final class HighlightRenderer {
                 continue;
             }
 
-            Box box = new Box(record.pos()).offset(-camera.x, -camera.y, -camera.z).expand(0.002D);
-            candidates.add(new VisibleRecord(record, box, distanceSq, wantsTexture, wantsHighlight));
+            CandidateRecord candidate = new CandidateRecord(record, distanceSq, wantsTexture, wantsHighlight);
+            if (nearest.size() < renderLimit) {
+                nearest.add(candidate);
+            } else if (nearest.peek() != null && distanceSq < nearest.peek().distanceSq()) {
+                nearest.poll();
+                nearest.add(candidate);
+            }
         }
 
-        if (candidates.isEmpty()) {
+        if (nearest.isEmpty()) {
             return 0;
         }
 
-        candidates.sort(Comparator.comparingDouble(VisibleRecord::distanceSq));
-        int rendered = Math.min(config.maxRenderedHighlights, candidates.size());
-        List<VisibleRecord> visibleRecords = candidates.subList(0, rendered);
+        List<CandidateRecord> candidates = new ArrayList<>(nearest);
+        candidates.sort(Comparator.comparingDouble(CandidateRecord::distanceSq));
+        List<VisibleRecord> visibleRecords = new ArrayList<>(candidates.size());
+        for (CandidateRecord candidate : candidates) {
+            Box box = new Box(candidate.record().pos()).offset(-camera.x, -camera.y, -camera.z).expand(0.002D);
+            visibleRecords.add(new VisibleRecord(candidate.record(), box, candidate.distanceSq(), candidate.wantsTexture(), candidate.wantsHighlight()));
+        }
+        int rendered = visibleRecords.size();
         boolean anyTexture = false;
         boolean anyFilled = false;
         boolean anyOutline = false;
@@ -268,10 +286,14 @@ public final class HighlightRenderer {
         }
         return switch (record.visibilityStatus()) {
             case PREDICTED_AND_CLIENT_MATCHES -> ColorUtil.withAlpha(base, 255);
+            case PREDICTED_CLIENT_OBSTRUCTED -> ColorUtil.withAlpha(base, 90);
             case PREDICTED_BUT_CLIENT_MASKED -> ColorUtil.withAlpha(base, 235);
             case UNKNOWN_UNLOADED -> ColorUtil.withAlpha(base, 170);
             default -> ColorUtil.withAlpha(base, 230);
         };
+    }
+
+    private record CandidateRecord(OrePredictionRecord record, double distanceSq, boolean wantsTexture, boolean wantsHighlight) {
     }
 
     private record VisibleRecord(OrePredictionRecord record, Box box, double distanceSq, boolean wantsTexture, boolean wantsHighlight) {

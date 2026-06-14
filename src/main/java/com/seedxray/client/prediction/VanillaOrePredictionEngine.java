@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +48,7 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
     private static final String ACCURACY =
             "Vanilla 1.21.11 ore adapter: registry-resolved placed feature index, vanilla population/decorator seed math, "
                     + "vanilla placement distributions, seed-derived biome placement checks, local seed terrain replacement checks when available; server-sent ore blocks remain diagnostic only.";
+    private static final int MAX_TERRAIN_COLUMN_CACHE_ENTRIES = 16_384;
     private static final List<OreFeatureSpec> SPECS = List.of(
             ore(OreTarget.DIAMOND, "ore_diamond", 7, heightTrapezoid(Offset.aboveBottom(-80), Offset.aboveBottom(80)), 4, 0.5F, TargetRule.OVERWORLD_STONE_DEEPSLATE),
             ore(OreTarget.DIAMOND, "ore_diamond_medium", 2, heightUniform(Offset.absolute(-64), Offset.absolute(-4)), 8, 0.5F, TargetRule.OVERWORLD_STONE_DEEPSLATE),
@@ -256,6 +258,26 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             Set<Long> emitted,
             boolean forceSeedCandidates
     ) {
+        generateSpec(result, terrainSampler, generatedStates, spec, random, populationSeed, resolvedFeature, chunkPos, dimensionId, bottomY, height, tick, emitted, forceSeedCandidates, true);
+    }
+
+    private static void generateSpec(
+            OrePredictionResult result,
+            LocalTerrainSampler terrainSampler,
+            GeneratedStateTracker generatedStates,
+            OreFeatureSpec spec,
+            ChunkRandom random,
+            long populationSeed,
+            ResolvedFeature resolvedFeature,
+            ChunkPos chunkPos,
+            String dimensionId,
+            int bottomY,
+            int height,
+            long tick,
+            Set<Long> emitted,
+            boolean forceSeedCandidates,
+            boolean emitRecord
+    ) {
         random.setDecoratorSeed(populationSeed, resolvedFeature.featureIndex(), resolvedFeature.generationStep());
         int count = spec.count().sample(random);
         for (int index = 0; index < count; index++) {
@@ -264,9 +286,9 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
                 continue;
             }
             if (spec.kind() == FeatureKind.SCATTERED_ORE) {
-                addScatteredOre(result, terrainSampler, generatedStates, spec, random, origin, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates);
+                addScatteredOre(result, terrainSampler, generatedStates, spec, random, origin, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates, emitRecord);
             } else {
-                addOreVein(result, terrainSampler, generatedStates, spec, random, origin, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates);
+                addOreVein(result, terrainSampler, generatedStates, spec, random, origin, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates, emitRecord);
             }
         }
     }
@@ -292,7 +314,7 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
     ) {
         for (ResolvedGenerationSpec resolvedSpec : resolveGenerationSpecs(resolved, dimensionId, enabledTargets)) {
             if (resolvedSpec.oreSpec() != null) {
-                generateSpec(result, terrainSampler, generatedStates, resolvedSpec.oreSpec(), random, populationSeed, resolvedSpec.resolvedFeature(), chunkPos, dimensionId, bottomY, height, tick, emitted, false);
+                generateSpec(result, terrainSampler, generatedStates, resolvedSpec.oreSpec(), random, populationSeed, resolvedSpec.resolvedFeature(), chunkPos, dimensionId, bottomY, height, tick, emitted, false, resolvedSpec.emitRecord());
             } else if (resolvedSpec.blockerSpec() != null) {
                 generateBlockerSpec(terrainSampler, generatedStates, random, populationSeed, resolvedSpec.blockerSpec(), resolvedSpec.resolvedFeature(), chunkPos, bottomY, height);
             }
@@ -311,12 +333,12 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             }
         }
         for (OreFeatureSpec spec : SPECS) {
-            if (!spec.target().belongsInDimension(dimensionId) || !enabledTargets.contains(spec.target())) {
+            if (!spec.target().belongsInDimension(dimensionId)) {
                 continue;
             }
             ResolvedFeature resolvedFeature = resolvedFeature(resolved, spec.placedFeatureId());
             if (resolvedFeature != null) {
-                specs.add(ResolvedGenerationSpec.ore(spec, resolvedFeature));
+                specs.add(ResolvedGenerationSpec.ore(spec, resolvedFeature, enabledTargets.contains(spec.target())));
             }
         }
         specs.sort(Comparator
@@ -436,13 +458,14 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             long tick,
             Set<Long> emitted,
             ResolvedFeature resolvedFeature,
-            boolean forceSeedCandidates
+            boolean forceSeedCandidates,
+            boolean emitRecord
     ) {
         int attempts = random.nextInt(spec.size() + 1);
         for (int index = 0; index < attempts; index++) {
             int spread = Math.min(index, 7);
             BlockPos pos = origin.add(getSpread(random, spread), getSpread(random, spread), getSpread(random, spread));
-            addIfReplaceable(result, terrainSampler, generatedStates, spec, random, pos, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates);
+            addIfReplaceable(result, terrainSampler, generatedStates, spec, random, pos, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates, emitRecord);
         }
     }
 
@@ -458,10 +481,11 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             long tick,
             Set<Long> emitted,
             ResolvedFeature resolvedFeature,
-            boolean forceSeedCandidates
+            boolean forceSeedCandidates,
+            boolean emitRecord
     ) {
         visitOreVeinPositions(terrainSampler, random, origin, spec.size(), forceSeedCandidates,
-                pos -> addIfReplaceable(result, terrainSampler, generatedStates, spec, random, pos, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates));
+                pos -> addIfReplaceable(result, terrainSampler, generatedStates, spec, random, pos, chunkPos, dimensionId, tick, emitted, resolvedFeature, forceSeedCandidates, emitRecord));
     }
 
     private static void visitOreVeinPositions(
@@ -593,10 +617,11 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             long tick,
             Set<Long> emitted,
             ResolvedFeature resolvedFeature,
-            boolean forceSeedCandidate
+            boolean forceSeedCandidate,
+            boolean emitRecord
     ) {
         long posKey = pos.asLong();
-        if ((!forceSeedCandidate && !terrainSampler.isInHeightLimit(pos.getY())) || emitted.contains(posKey)) {
+        if ((!forceSeedCandidate && !terrainSampler.isInHeightLimit(pos.getY())) || (emitRecord && emitted.contains(posKey))) {
             return;
         }
         if (!forceSeedCandidate) {
@@ -609,6 +634,9 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
                 return;
             }
             generatedStates.put(pos, predictedState);
+        }
+        if (!emitRecord) {
+            return;
         }
         emitted.add(posKey);
         BlockState predictedState = forceSeedCandidate ? spec.target().blocks()[0].getDefaultState() : generatedStates.get(pos);
@@ -855,13 +883,13 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
         }
     }
 
-    private record ResolvedGenerationSpec(OreFeatureSpec oreSpec, BlockerFeatureSpec blockerSpec, ResolvedFeature resolvedFeature) {
-        static ResolvedGenerationSpec ore(OreFeatureSpec spec, ResolvedFeature resolvedFeature) {
-            return new ResolvedGenerationSpec(spec, null, resolvedFeature);
+    private record ResolvedGenerationSpec(OreFeatureSpec oreSpec, BlockerFeatureSpec blockerSpec, ResolvedFeature resolvedFeature, boolean emitRecord) {
+        static ResolvedGenerationSpec ore(OreFeatureSpec spec, ResolvedFeature resolvedFeature, boolean emitRecord) {
+            return new ResolvedGenerationSpec(spec, null, resolvedFeature, emitRecord);
         }
 
         static ResolvedGenerationSpec blocker(BlockerFeatureSpec spec, ResolvedFeature resolvedFeature) {
-            return new ResolvedGenerationSpec(null, spec, resolvedFeature);
+            return new ResolvedGenerationSpec(null, spec, resolvedFeature, false);
         }
     }
 
@@ -906,8 +934,8 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
         private final RegistryEntryLookup<PlacedFeature> placedFeatureLookup;
         private final boolean unavailable;
         private final HeightLimitView heightLimitView;
-        private final Map<Long, VerticalBlockSample> columns = new HashMap<>();
-        private final Map<Long, Integer> topY = new HashMap<>();
+        private final Map<Long, VerticalBlockSample> columns = boundedColumnCache();
+        private final Map<Long, Integer> topY = boundedColumnCache();
         private final Map<Identifier, PlacedFeature> placedFeatures = new HashMap<>();
         private Map<Identifier, ResolvedFeature> resolvedFeatures;
 
@@ -1059,6 +1087,15 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
 
         private static long columnKey(int x, int z) {
             return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
+        }
+
+        private static <T> Map<Long, T> boundedColumnCache() {
+            return new LinkedHashMap<>(1024, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Long, T> eldest) {
+                    return size() > MAX_TERRAIN_COLUMN_CACHE_ENTRIES;
+                }
+            };
         }
     }
 }

@@ -35,7 +35,7 @@ public final class ClientSeenBlockScanner {
             analyzer.applyClientSeenState(record, world.getBlockState(record.pos()), tick);
         }
 
-        if (XrayClientMod.CONFIG.get().showClientVisibleUnpredictedOres) {
+        if (XrayClientMod.CONFIG.get().displayMode.showsDiagnostics() && XrayClientMod.CONFIG.get().showClientVisibleUnpredictedOres) {
             scanUnpredictedClientOres(world, key, predictionCache, diagnosticCache, tick);
         }
     }

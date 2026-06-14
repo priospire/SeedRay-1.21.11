@@ -222,6 +222,11 @@ public final class XrayConfigScreen extends Screen {
             config.showLabels = value;
             saveConfigOnly();
         });
+        y += 24;
+        addToggle(leftX, y, width, "Show Obstructed", () -> config.showClientObstructedPredictions, value -> {
+            config.showClientObstructedPredictions = value;
+            saveConfigOnly();
+        });
     }
 
     private void initSeed(int panelX, int y, int panelWidth) {
@@ -479,7 +484,7 @@ public final class XrayConfigScreen extends Screen {
     private void updateContentHeight() {
         contentHeight = switch (tab) {
             case ORES -> 8 + OreTarget.values().length * ROW_HEIGHT;
-            case VISUAL -> 260;
+            case VISUAL -> 284;
             case SEED -> 120;
             case KEYS -> 12 + keybindManager.managedBindings().size() * ROW_HEIGHT;
         };

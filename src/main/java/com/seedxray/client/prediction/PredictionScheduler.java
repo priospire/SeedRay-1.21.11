@@ -17,6 +17,7 @@ public final class PredictionScheduler {
     private final PredictionCache cache;
     private final Queue<ChunkKey> queue = new ArrayDeque<>();
     private final Set<ChunkKey> queued = new HashSet<>();
+    private long lastPruneTick = Long.MIN_VALUE;
 
     public PredictionScheduler(OrePredictionEngine engine, PredictionCache cache) {
         this.engine = engine;
@@ -33,6 +34,7 @@ public final class PredictionScheduler {
         }
 
         enqueueNearby(client.world, client.player, config);
+        pruneFarPredictions(client.world, client.player, config);
 
         int budget = config.maxPredictedChunksPerTick;
         while (budget-- > 0 && !queue.isEmpty()) {
@@ -43,6 +45,17 @@ public final class PredictionScheduler {
             }
             cache.put(engine.predictChunk(client.world, key, client.world.getTime()));
         }
+    }
+
+    private void pruneFarPredictions(ClientWorld world, ClientPlayerEntity player, XrayConfig config) {
+        long time = world.getTime();
+        if (lastPruneTick != Long.MIN_VALUE && time - lastPruneTick < 40L) {
+            return;
+        }
+        lastPruneTick = time;
+        String dimensionId = world.getRegistryKey().getValue().toString();
+        int retainedRadius = config.predictionRadiusChunks + XrayConstants.PREDICTION_ORIGIN_MARGIN_CHUNKS + 1;
+        cache.pruneFar(dimensionId, player.getChunkPos(), retainedRadius);
     }
 
     private void enqueueNearby(ClientWorld world, ClientPlayerEntity player, XrayConfig config) {
@@ -75,5 +88,6 @@ public final class PredictionScheduler {
     public void clearQueue() {
         queue.clear();
         queued.clear();
+        lastPruneTick = Long.MIN_VALUE;
     }
 }

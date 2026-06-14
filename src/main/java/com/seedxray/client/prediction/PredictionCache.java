@@ -83,6 +83,12 @@ public final class PredictionCache {
         return byChunk.size();
     }
 
+    public synchronized void pruneFar(String dimensionId, ChunkPos center, int maxOriginRadiusChunks) {
+        byChunk.keySet().removeIf(key -> !key.dimensionId().equals(dimensionId)
+                || Math.max(Math.abs(key.chunkX() - center.x), Math.abs(key.chunkZ() - center.z)) > maxOriginRadiusChunks);
+        rebuildIndexes();
+    }
+
     public synchronized void clear() {
         byChunk.clear();
         byDimensionAndPos.clear();
@@ -93,5 +99,20 @@ public final class PredictionCache {
         byChunk.keySet().removeIf(key -> !key.dimensionId().equals(dimensionId));
         byDimensionAndPos.keySet().removeIf(key -> !key.equals(dimensionId));
         byBlockChunk.keySet().removeIf(key -> !key.dimensionId().equals(dimensionId));
+    }
+
+    private void rebuildIndexes() {
+        byDimensionAndPos.clear();
+        byBlockChunk.clear();
+        for (OrePredictionResult result : byChunk.values()) {
+            Map<Long, OrePredictionRecord> posMap = byDimensionAndPos.computeIfAbsent(result.chunkKey().dimensionId(), ignored -> new HashMap<>());
+            for (OrePredictionRecord record : result.records()) {
+                posMap.put(record.pos().asLong(), record);
+                ChunkKey blockChunkKey = new ChunkKey(record.dimensionId(), record.pos().getX() >> 4, record.pos().getZ() >> 4);
+                byBlockChunk
+                        .computeIfAbsent(blockChunkKey, ignored -> new HashMap<>())
+                        .put(record.pos().asLong(), record);
+            }
+        }
     }
 }

@@ -24,14 +24,15 @@ The adapter implements the vanilla placed/configured feature core:
 - Simulates vanilla `ore` and `scattered_ore` feature placement.
 - Simulates vanilla count, rarity, in-square, uniform height, and trapezoid height placement.
 - Interleaves simulated underground blocker features and target ore features by vanilla generation step/index, so gravel, dirt, tuff, blackstone, magma, soul sand, infested stone, and similar same-step features can block ores in the same order vanilla would apply them.
+- Simulates all vanilla ore features in the dimension as generated blockers even when an ore filter disables rendering for that family, so disabled ores can still prevent later ore features from being falsely predicted in the same block.
 - Applies vanilla-style biome placement filtering from a seed-derived `NoiseChunkGenerator` biome source.
-- Uses Minecraft's `NoiseChunkGenerator` column sampler with the configured seed for local replacement checks.
+- Uses Minecraft's `NoiseChunkGenerator` column sampler with the configured seed for local replacement checks; sampled air, fluid, bedrock, and other non-replaceable states are rejected when the vanilla sampler exposes them.
 - Stores the predicted block state on every record, so deepslate variants such as deepslate emerald render with their deepslate ore texture when generated in deepslate-replaceable terrain.
 - Uses the client's built-in vanilla `1.21.11` registry data for generator settings and noise parameters, so normal prediction does not depend on multiplayer server-sent ore/block states.
 - A build-time self-test verifies that vanilla seed placement math produces nonzero Overworld, Nether, and ancient debris placement origins.
 - Does not let loaded multiplayer client block states veto predictions, because PaperMC anti-xray may mask or spoof those states.
 
-This means the overlay is based on vanilla seed feature placement plus local vanilla terrain sampling, not a scan of server-sent ore blocks. Full carver, lava, fluid, structure, and neighboring-origin mutation parity are still the main remaining accuracy limitations; server-sent block states are intentionally diagnostic only.
+This means the overlay is based on vanilla seed feature placement plus local vanilla terrain sampling, not a scan of server-sent ore blocks. Full carver, cave-liquid, structure, and neighboring-origin mutation parity are still the main remaining accuracy limitations; server-sent block states are intentionally diagnostic only.
 
 Prediction depends on the server using vanilla-compatible world generation for Minecraft `1.21.11`. Datapacks, custom ore rates, custom terrain generation, or plugins that modify generation can make predictions wrong.
 
@@ -45,6 +46,7 @@ Statuses:
 
 - `PREDICTED_ONLY`: seed prediction exists, no client comparison yet.
 - `PREDICTED_AND_CLIENT_MATCHES`: predicted ore matches the client-visible ore family.
+- `PREDICTED_CLIENT_OBSTRUCTED`: seed prediction exists, but the loaded client chunk currently exposes a trusted non-ore obstruction at that block, such as air, fluid, or bedrock. These are hidden by default to reduce cave/liquid false positives.
 - `PREDICTED_BUT_CLIENT_MASKED`: seed predicts ore, but the client currently sees another block.
 - `CLIENT_ORE_NOT_PREDICTED`: loaded client chunk contains an ore not predicted by the current seed adapter.
 - `UNKNOWN_UNLOADED`: client chunk is not loaded.
@@ -97,6 +99,7 @@ Main fields:
 - `showOreTextures`
 - `showClientVisibleUnpredictedOres`
 - `showMaskedPredictions`
+- `showClientObstructedPredictions`
 - `oreFilters`
 - `oreHighlightEnabled`
 - `oreTextureEnabled`
@@ -112,9 +115,17 @@ Defaults prioritize performance:
 - Diagnostic radius: `4` chunks
 - Max predicted chunks per tick: `1`
 - Max diagnostic chunks scanned per tick: `1`
-- Max rendered highlights: `1500`
+- Max rendered highlights: `1000`
 - Distance limit: `192` blocks
 - Full loaded-chunk anomaly scans are disabled by default; diagnostics still compare predicted positions against client-visible block states.
+
+Runtime performance safeguards:
+
+- Prediction caches are pruned around the active player radius instead of growing indefinitely while exploring.
+- Local terrain column/top-Y caches are bounded per dimension.
+- The renderer keeps the nearest capped records while scanning instead of sorting every in-range candidate every frame.
+- Lightweight predicted-position obstruction scans run in Prediction, Combined, and Diagnostic modes so air/fluid/bedrock false positives can be hidden after their chunks load.
+- Full client-visible anomaly scans remain limited to diagnostic display modes and skip chunks with no predicted records unless that anomaly scan is enabled.
 
 The `F8` quick panel provides per-ore enabled/highlight/texture/color/alpha controls and writes the same config file. Status messages in the panel fade out after saving.
 

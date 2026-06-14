@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class XrayConfig {
-    public int configVersion = 11;
+    public int configVersion = 13;
     public boolean enabled = false;
     public long worldSeed = 0L;
     public boolean seedConfigured = false;
@@ -29,6 +29,7 @@ public final class XrayConfig {
     public boolean showOutlines = true;
     public boolean showClientVisibleUnpredictedOres = false;
     public boolean showMaskedPredictions = true;
+    public boolean showClientObstructedPredictions = false;
     public Map<String, Boolean> oreFilters = new HashMap<>();
     public Map<String, Boolean> oreHighlightEnabled = new HashMap<>();
     public Map<String, Boolean> oreTextureEnabled = new HashMap<>();
@@ -129,6 +130,16 @@ public final class XrayConfig {
         }
         if (configVersion < 11) {
             configVersion = 11;
+        }
+        if (configVersion < 12) {
+            if (maxRenderedHighlights > XrayConstants.DEFAULT_MAX_RENDERED_HIGHLIGHTS) {
+                maxRenderedHighlights = XrayConstants.DEFAULT_MAX_RENDERED_HIGHLIGHTS;
+            }
+            configVersion = 12;
+        }
+        if (configVersion < 13) {
+            showClientObstructedPredictions = false;
+            configVersion = 13;
         }
         for (OreTarget target : OreTarget.values()) {
             oreFilters.putIfAbsent(target.name(), true);

@@ -11,6 +11,8 @@ public final class AntiXrayDiagnosticAnalyzer {
         record.setLastDiagnosticScanTick(tick);
         if (BlockUtil.matchesOreFamily(clientState, record.oreTarget())) {
             record.setVisibilityStatus(PredictionVisibilityStatus.PREDICTED_AND_CLIENT_MATCHES);
+        } else if (BlockUtil.isTrustedClientObstruction(clientState)) {
+            record.setVisibilityStatus(PredictionVisibilityStatus.PREDICTED_CLIENT_OBSTRUCTED);
         } else {
             record.setVisibilityStatus(PredictionVisibilityStatus.PREDICTED_BUT_CLIENT_MASKED);
         }
