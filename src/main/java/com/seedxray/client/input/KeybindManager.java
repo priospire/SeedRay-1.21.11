@@ -11,6 +11,9 @@ import com.seedxray.client.prediction.PredictionCache;
 import com.seedxray.client.prediction.PredictionScheduler;
 import com.seedxray.client.screen.XrayConfigScreen;
 import com.seedxray.client.render.TerrainTransparencyHooks;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
@@ -21,7 +24,7 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 public final class KeybindManager {
-    private static final KeyBinding.Category CATEGORY = KeyBinding.Category.create(Identifier.of(XrayConstants.MOD_ID, "controls"));
+    private static final Object CATEGORY = createCategory();
     private final PredictionCache predictionCache;
     private final DiagnosticCache diagnosticCache;
     private final PredictionScheduler predictionScheduler;
@@ -154,12 +157,53 @@ public final class KeybindManager {
     }
 
     private static KeyBinding register(String translationKey, int key) {
-        return KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                translationKey,
-                InputUtil.Type.KEYSYM,
-                key,
-                CATEGORY
-        ));
+        return KeyBindingHelper.registerKeyBinding(createKeyBinding(translationKey, key));
+    }
+
+    private static Object createCategory() {
+        try {
+            Class<?> categoryClass = Class.forName("net.minecraft.client.option.KeyBinding$Category");
+            Method create = categoryClass.getMethod("create", Identifier.class);
+            return create.invoke(null, Identifier.of(XrayConstants.MOD_ID, "controls"));
+        } catch (ClassNotFoundException ignored) {
+            return "key.categories." + XrayConstants.MOD_ID + ".controls";
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to create Seed X-Ray keybinding category", exception);
+        }
+    }
+
+    private static KeyBinding createKeyBinding(String translationKey, int key) {
+        try {
+            Constructor<KeyBinding> constructor = KeyBinding.class.getConstructor(
+                    String.class,
+                    InputUtil.Type.class,
+                    int.class,
+                    CATEGORY.getClass()
+            );
+            return constructor.newInstance(translationKey, InputUtil.Type.KEYSYM, key, CATEGORY);
+        } catch (NoSuchMethodException exception) {
+            if (CATEGORY instanceof String category) {
+                return createLegacyKeyBinding(translationKey, key, category, exception);
+            }
+            throw new IllegalStateException("Unsupported Seed X-Ray keybinding constructor", exception);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException exception) {
+            throw new IllegalStateException("Unable to create Seed X-Ray keybinding", exception);
+        }
+    }
+
+    private static KeyBinding createLegacyKeyBinding(String translationKey, int key, String category, NoSuchMethodException firstFailure) {
+        try {
+            Constructor<KeyBinding> constructor = KeyBinding.class.getConstructor(
+                    String.class,
+                    InputUtil.Type.class,
+                    int.class,
+                    String.class
+            );
+            return constructor.newInstance(translationKey, InputUtil.Type.KEYSYM, key, category);
+        } catch (ReflectiveOperationException exception) {
+            exception.addSuppressed(firstFailure);
+            throw new IllegalStateException("Unsupported Seed X-Ray keybinding constructor", exception);
+        }
     }
 
     private static String readableMode(DisplayMode mode) {

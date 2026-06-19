@@ -15,10 +15,12 @@ import java.util.Set;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.registry.Registry;
 import net.minecraft.registry.BuiltinRegistries;
 import net.minecraft.registry.RegistryEntryLookup;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.Identifier;
@@ -395,11 +397,11 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
     private static LocalTerrainSampler createLocalTerrainSampler(String dimensionId, long seed) {
         try {
             var lookup = BuiltinRegistries.createWrapperLookup();
-            RegistryEntryLookup<ChunkGeneratorSettings> settingsRegistry = lookup.getOrThrow(RegistryKeys.CHUNK_GENERATOR_SETTINGS);
-            RegistryEntryLookup<DoublePerlinNoiseSampler.NoiseParameters> noiseRegistry = lookup.getOrThrow(RegistryKeys.NOISE_PARAMETERS);
+            RegistryEntryLookup<ChunkGeneratorSettings> settingsRegistry = registryLookup(lookup, RegistryKeys.CHUNK_GENERATOR_SETTINGS);
+            RegistryEntryLookup<DoublePerlinNoiseSampler.NoiseParameters> noiseRegistry = registryLookup(lookup, RegistryKeys.NOISE_PARAMETERS);
             RegistryEntryLookup<MultiNoiseBiomeSourceParameterList> biomeParameterRegistry =
-                    lookup.getOrThrow(RegistryKeys.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
-            RegistryEntryLookup<PlacedFeature> placedFeatureRegistry = lookup.getOrThrow(RegistryKeys.PLACED_FEATURE);
+                    registryLookup(lookup, RegistryKeys.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+            RegistryEntryLookup<PlacedFeature> placedFeatureRegistry = registryLookup(lookup, RegistryKeys.PLACED_FEATURE);
             RegistryEntry.Reference<ChunkGeneratorSettings> settingsEntry;
             RegistryEntry.Reference<MultiNoiseBiomeSourceParameterList> biomeParameters;
             if ("minecraft:the_nether".equals(dimensionId)) {
@@ -416,6 +418,26 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
             return new LocalTerrainSampler(generator, noiseConfig, placedFeatureRegistry, false);
         } catch (RuntimeException ignoredException) {
             return LocalTerrainSampler.createUnavailable();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> RegistryEntryLookup<T> registryLookup(
+            RegistryWrapper.WrapperLookup lookup,
+            RegistryKey<? extends Registry<? extends T>> key
+    ) {
+        try {
+            try {
+                return (RegistryEntryLookup<T>) lookup.getClass()
+                        .getMethod("getOrThrow", RegistryKey.class)
+                        .invoke(lookup, key);
+            } catch (NoSuchMethodException ignored) {
+                return (RegistryEntryLookup<T>) lookup.getClass()
+                        .getMethod("getWrapperOrThrow", RegistryKey.class)
+                        .invoke(lookup, key);
+            }
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to access vanilla registry lookup", exception);
         }
     }
 
@@ -961,7 +983,7 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
         }
 
         boolean isInHeightLimit(int y) {
-            return !unavailable && heightLimitView.isInHeightLimit(y);
+            return !unavailable && !heightLimitView.isOutOfHeightLimit(y);
         }
 
         Map<Identifier, ResolvedFeature> resolveFeatureIndices() {
@@ -1054,7 +1076,7 @@ public final class VanillaOrePredictionEngine implements OrePredictionEngine {
                 return Integer.MIN_VALUE;
             }
             return topY.computeIfAbsent(columnKey(x, z), ignored -> {
-                for (int y = heightLimitView.getTopYInclusive(); y >= heightLimitView.getBottomY(); y--) {
+                for (int y = heightLimitView.getBottomY() + heightLimitView.getHeight() - 1; y >= heightLimitView.getBottomY(); y--) {
                     if (!getColumn(x, z).getState(y).isAir()) {
                         return y;
                     }

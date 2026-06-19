@@ -1,9 +1,9 @@
 ## Target
 
-- Minecraft: verified jars for `1.21.11` and `1.21.10`
+- Minecraft: verified jars for `1.21`, `1.21.10`, and `1.21.11`
 - Fabric Loader: `0.19.2`
-- Fabric API: `0.141.4+1.21.11` for development and runtime minimum on the `1.21.11` jar
-- Yarn mappings: `1.21.11+build.5`
+- Fabric API: `0.102.0+1.21`, `0.138.4+1.21.10`, or `0.141.4+1.21.11`, depending on the jar
+- Yarn mappings: `1.21+build.9`, `1.21.10+build.3`, or `1.21.11+build.5`
 - Java: `21`
 
 Versioned build outputs use matching Fabric API/Yarn coordinates per Minecraft version. See `COMPATIBILITY.md` for the verified matrix and 26.x port status.
@@ -12,7 +12,7 @@ The active seed is configured in the in-game `F8` quick panel or `.minecraft/con
 
 ## Prediction Accuracy
 
-The vanilla `1.21.11` adapter emits seed predictions for the requested Overworld and Nether ore families:
+The vanilla `1.21.x` adapter emits seed predictions for the requested Overworld and Nether ore families:
 
 - Diamond, emerald, gold, iron, coal, copper, redstone, and lapis in the Overworld.
 - Ancient debris, Nether gold, and Nether quartz in the Nether.
@@ -28,15 +28,15 @@ The adapter implements the vanilla placed/configured feature core:
 - Applies vanilla-style biome placement filtering from a seed-derived `NoiseChunkGenerator` biome source.
 - Uses Minecraft's `NoiseChunkGenerator` column sampler with the configured seed for local replacement checks; sampled air, fluid, bedrock, and other non-replaceable states are rejected when the vanilla sampler exposes them.
 - Stores the predicted block state on every record, so deepslate variants such as deepslate emerald render with their deepslate ore texture when generated in deepslate-replaceable terrain.
-- Uses the client's built-in vanilla `1.21.11` registry data for generator settings and noise parameters, so normal prediction does not depend on multiplayer server-sent ore/block states.
+- Uses the client's built-in vanilla registry data for generator settings and noise parameters, so normal prediction does not depend on multiplayer server-sent ore/block states.
 - A build-time self-test verifies that vanilla seed placement math produces nonzero Overworld, Nether, and ancient debris placement origins.
 - Does not let loaded multiplayer client block states veto predictions, because PaperMC anti-xray may mask or spoof those states.
 
 This means the overlay is based on vanilla seed feature placement plus local vanilla terrain sampling, not a scan of server-sent ore blocks. Full carver, cave-liquid, structure, and neighboring-origin mutation parity are still the main remaining accuracy limitations; server-sent block states are intentionally diagnostic only.
 
-Prediction depends on the server using vanilla-compatible world generation for Minecraft `1.21.11`. Datapacks, custom ore rates, custom terrain generation, or plugins that modify generation can make predictions wrong.
+Prediction depends on the server using vanilla-compatible world generation for the exact Minecraft version of the installed jar. Datapacks, custom ore rates, custom terrain generation, or plugins that modify generation can make predictions wrong.
 
-The `1.21.10` jar uses a compatibility render adapter, but the worldgen adapter is still tuned against the `1.21.11` vanilla feature set. Use local-world spot checks before treating older-version predictions as a source of truth.
+The `1.21` and `1.21.10` jars use compatibility render adapters. The worldgen adapter is shared across the verified `1.21.x` line, so use local-world spot checks before treating older-version predictions as a source of truth.
 
 ## PaperMC Anti-Xray Diagnostics
 
@@ -161,6 +161,7 @@ The script backs up any installed `seed-xray-*.jar` files into `jar-backups/`, t
 
 - `dist/seed-xray-0.1.12+mc1.21.11.jar`
 - `dist/seed-xray-0.1.12+mc1.21.10.jar`
+- `dist/seed-xray-0.1.12+mc1.21.jar`
 
 As of the latest Fabric porting check for this project, `26.1.x` requires migrating away from Yarn to Mojang's official/unobfuscated mappings and Java 25.
 

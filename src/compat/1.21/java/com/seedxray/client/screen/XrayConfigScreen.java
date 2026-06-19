@@ -1,7 +1,6 @@
 package com.seedxray.client.screen;
 
 import com.seedxray.client.input.KeybindManager;
-import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.util.InputUtil;
 
 public final class XrayConfigScreen extends XrayConfigScreenBase {
@@ -10,7 +9,7 @@ public final class XrayConfigScreen extends XrayConfigScreenBase {
     }
 
     @Override
-    public boolean keyPressed(KeyInput keyInput) {
-        return handleKeyPressed(keyInput.key(), InputUtil.fromKeyCode(keyInput)) || super.keyPressed(keyInput);
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return handleKeyPressed(keyCode, InputUtil.fromKeyCode(keyCode, scanCode)) || super.keyPressed(keyCode, scanCode, modifiers);
     }
 }

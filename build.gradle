@@ -37,6 +37,35 @@ processResources {
     }
 }
 
+sourceSets {
+    main {
+        java {
+            if (project.minecraft_version == "1.21") {
+                srcDir "src/compat/1.21/java"
+                exclude { details ->
+                    def path = details.file.toPath().normalize()
+                    return path == file("src/main/java/com/seedxray/client/XrayClientMod.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/render/HighlightRenderer.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/render/XrayRenderer.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/render/XrayRenderLayers.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/mixin/BlockRenderLayersMixin.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/mixin/BlockModelRendererMixin.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/screen/XrayConfigScreen.java").toPath().normalize()
+                }
+            }
+            if (project.minecraft_version == "1.21.10") {
+                srcDir "src/compat/1.21.10/java"
+                exclude { details ->
+                    def path = details.file.toPath().normalize()
+                    return path == file("src/main/java/com/seedxray/client/render/HighlightRenderer.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/render/XrayRenderLayers.java").toPath().normalize()
+                            || path == file("src/main/java/com/seedxray/client/mixin/BlockRenderLayersMixin.java").toPath().normalize()
+                }
+            }
+        }
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
 }

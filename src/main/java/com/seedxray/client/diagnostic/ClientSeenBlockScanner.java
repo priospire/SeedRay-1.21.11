@@ -44,7 +44,7 @@ public final class ClientSeenBlockScanner {
         ChunkPos chunkPos = key.chunkPos();
         BlockPos.Mutable pos = new BlockPos.Mutable();
         int minY = world.getBottomY();
-        int maxY = world.getTopYInclusive();
+        int maxY = world.getBottomY() + world.getHeight() - 1;
         for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
             for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
                 for (int y = minY; y <= maxY; y++) {
